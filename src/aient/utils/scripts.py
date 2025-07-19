@@ -8,7 +8,6 @@ import logging
 
 from ..core.utils import get_image_message
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
 
 def get_doc_from_url(url):
@@ -39,29 +38,15 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
     filename = docpath
     text = None
     prompt = None
-    
-    # Проверяем, является ли docurl действительным URL
-    def is_valid_url(url):
-        if not url:
-            return False
-        return url.startswith(('http://', 'https://', 'ftp://', 'file://'))
-    
-    # Если docurl является URL и docpath не является paper.pdf, скачиваем файл
-    if docpath and docurl and "paper.pdf" != docpath and is_valid_url(docurl):
+    if docpath and docurl and "paper.pdf" != docpath:
         filename = get_doc_from_url(docurl)
         docpath = os.getcwd() + "/" + filename
-    
-    # Обработка PDF файлов
     if filename and filename[-3:] == "pdf":
         from pdfminer.high_level import extract_text
         text = extract_text(docpath)
-    
-    # Обработка текстовых файлов
     if filename and (filename[-3:] == "txt" or filename[-3:] == ".md" or filename[-3:] == ".py" or filename[-3:] == "yml"):
         with open(docpath, 'r') as f:
             text = f.read()
-    
-    # Формируем промпт для текстовых документов
     if text:
         prompt = (
             "Here is the document, inside <document></document> XML tags:"
@@ -69,39 +54,34 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
             "{}"
             "</document>"
         ).format(text)
-    
-    # Обработка изображений
     if filename and (filename[-3:] == "jpg" or filename[-3:] == "png" or filename[-4:] == "jpeg"):
-        # Если docurl является валидным URL, используем его для получения изображения
-        if is_valid_url(docurl):
+        # Check if docurl is a local file path or URL
+        if docurl and (docurl.startswith("http") or docurl.startswith("data:")):
+            # It's a URL or base64 string
             prompt = await get_image_message(docurl, engine_type)
-        else:
-            # Если это локальный файл, конвертируем его в base64
-            try:
-                import base64
-                import mimetypes
-                
-                # Определяем MIME тип на основе расширения файла
-                if filename.lower().endswith('.jpg') or filename.lower().endswith('.jpeg'):
-                    mime_type = 'image/jpeg'
-                elif filename.lower().endswith('.png'):
-                    mime_type = 'image/png'
+        elif os.path.exists(str(docpath)):
+            # It's a local file - convert to base64
+            import base64
+            with open(docpath, "rb") as image_file:
+                image_data = image_file.read()
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                # Determine mime type based on file extension
+                if filename.endswith('.jpg') or filename.endswith('.jpeg'):
+                    mime_type = "image/jpeg"
+                elif filename.endswith('.png'):
+                    mime_type = "image/png"
                 else:
-                    mime_type = 'image/jpeg'  # По умолчанию
-                
-                # Читаем файл и конвертируем в base64
-                with open(docpath, 'rb') as image_file:
-                    image_data = image_file.read()
-                    base64_encoded = base64.b64encode(image_data).decode('utf-8')
-                    base64_image = f"data:{mime_type};base64,{base64_encoded}"
-                
-                prompt = await get_image_message(base64_image, engine_type)
-            except Exception as e:
-                print(f"Error processing local image file: {e}")
-                return None
-    
-    # Обработка аудио файлов
-    if filename and (filename[-3:] == "wav" or filename[-3:] == "mp3"):
+                    mime_type = "image/jpeg"  # default
+                base64_data_uri = f"data:{mime_type};base64,{base64_image}"
+                prompt = await get_image_message(base64_data_uri, engine_type)
+        else:
+            # Fallback: try to treat as URL anyway
+            try:
+                prompt = await get_image_message(docurl, engine_type)
+                         except Exception as e:
+                 logger.error(f"Failed to process image: {e}")
+                 prompt = f"[Image processing failed: {str(e)}]"
+    if filename and filename[-3:] == "wav" or filename[-3:] == "mp3":
         with open(docpath, "rb") as file:
             file_bytes = file.read()
         prompt = get_audio_message(file_bytes)
@@ -111,11 +91,8 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
             "{}"
             "</voice-to-text>"
         ).format(prompt)
-    
-    # Удаляем временный файл если он существует
-    if os.path.exists(docpath):
+    if docpath and os.path.exists(docpath):
         os.remove(docpath)
-    
     return prompt
 
 def split_json_strings(input_string):
