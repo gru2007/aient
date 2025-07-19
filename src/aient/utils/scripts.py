@@ -78,9 +78,9 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
             # Fallback: try to treat as URL anyway
             try:
                 prompt = await get_image_message(docurl, engine_type)
-                         except Exception as e:
-                 logger.error(f"Failed to process image: {e}")
-                 prompt = f"[Image processing failed: {str(e)}]"
+            except Exception as e:
+                logger.error(f"Failed to process image: {e}")
+                prompt = f"[Image processing failed: {str(e)}]"
     if filename and filename[-3:] == "wav" or filename[-3:] == "mp3":
         with open(docpath, "rb") as file:
             file_bytes = file.read()
