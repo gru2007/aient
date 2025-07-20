@@ -161,6 +161,14 @@ Examples:
                 # 捕获在此块中可能发生的其他错误，例如未被早期检查捕获的文件读取问题
                 return f"<tool_error>处理通用文件 '{file_path}' 时发生错误: {e}</tool_error>"
 
+        if file_path.lower().endswith('.csv'):
+            lines = text_content.splitlines(True)
+            if len(lines) > 500:
+                top_lines = lines[:250]
+                bottom_lines = lines[-250:]
+                omitted_count = len(lines) - 500
+                text_content = "".join(top_lines) + f"\n... (中间省略了 {omitted_count} 行) ...\n" + "".join(bottom_lines)
+
         # 返回文件内容
         return text_content
 
