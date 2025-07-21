@@ -1,6 +1,5 @@
 import os
 import httpx
-import requests
 from pathlib import Path
 from collections import defaultdict
 
@@ -46,13 +45,6 @@ class BaseLLM:
         )
         self.timeout: float = timeout
         self.proxy = proxy
-        self.session = requests.Session()
-        self.session.proxies.update(
-            {
-                "http": proxy,
-                "https": proxy,
-            },
-        )
         if proxy := (
             proxy or os.environ.get("all_proxy") or os.environ.get("ALL_PROXY") or None
         ):

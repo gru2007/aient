@@ -1,8 +1,9 @@
 import os
-import requests
+import httpx
 import json
 from ..models.base import BaseLLM
 from .registry import register_tool
+import asyncio
 
 API = os.environ.get('API', None)
 API_URL = os.environ.get('API_URL', None)
@@ -17,7 +18,7 @@ class dalle3(BaseLLM):
         super().__init__(api_key, api_url=api_url, timeout=timeout)
         self.engine: str = "dall-e-3"
 
-    def generate(
+    async def generate(
         self,
         prompt: str,
         model: str = "",
@@ -33,17 +34,17 @@ class dalle3(BaseLLM):
                 "size": "1024x1024",
         }
         try:
-            response = self.session.post(
-                url,
-                headers=headers,
-                json=json_post,
-                timeout=kwargs.get("timeout", self.timeout),
-                stream=True,
-            )
-        except ConnectionError:
+            async with httpx.AsyncClient(timeout=kwargs.get("timeout", self.timeout)) as client:
+                response = await client.post(
+                    url,
+                    headers=headers,
+                    json=json_post,
+                    timeout=kwargs.get("timeout", self.timeout),
+                )
+        except httpx.ConnectError:
             print("连接错误，请检查服务器状态或网络连接。")
             return
-        except requests.exceptions.ReadTimeout:
+        except httpx.ReadTimeout:
             print("请求超时，请检查网络连接或增加超时时间。{e}")
             return
         except Exception as e:
@@ -51,13 +52,13 @@ class dalle3(BaseLLM):
             return
 
         if response.status_code != 200:
-            raise Exception(f"{response.status_code} {response.reason} {response.text}")
-        json_data = json.loads(response.text)
+            raise Exception(f"{response.status_code} {response.reason_phrase} {response.text}")
+        json_data = response.json()
         url = json_data["data"][0]["url"]
         yield url
 
 @register_tool()
-def generate_image(text):
+async def generate_image(text):
     """
     生成图像
 
@@ -68,5 +69,5 @@ def generate_image(text):
         图像的URL
     """
     dallbot = dalle3(api_key=f"{API}")
-    for data in dallbot.generate(text):
+    async for data in dallbot.generate(text):
         return data
