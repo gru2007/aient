@@ -118,7 +118,7 @@ class deepseek(BaseLLM):
 
         if response.status_code != 200:
             print(response.text)
-            raise BaseException(f"{response.status_code} {response.reason} {response.text}")
+            raise BaseException(f"{response.status_code} {response.text}")
         response_role: str = "assistant"
         full_response: str = ""
         for line in response.iter_lines():
@@ -201,7 +201,7 @@ class deepseek(BaseLLM):
                 if response.status_code != 200:
                     await response.aread()
                     print(response.text)
-                    raise BaseException(f"{response.status_code} {response.reason} {response.text}")
+                    raise BaseException(f"{response.status_code} {response.text}")
                 async for line in response.aiter_lines():
                     if not line:
                         continue
