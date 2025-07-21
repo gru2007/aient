@@ -5,16 +5,27 @@ import requests
 from .base import BaseLLM
 
 class deepseek(BaseLLM):
+    """
+    DeepSeek API wrapper supporting both chat and reasoning models (deepseek-chat, deepseek-coder, deepseek-reasoner).
+    Handles reasoning_content in streaming responses for deepseek-reasoner.
+    """
     def __init__(
         self,
         api_key: str = None,
         engine: str = os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat",
-        api_url: str = "https://api.deepseek.com/v1/chat/completions",
-        system_prompt: str = "You are DeepSeek, a helpful and versatile AI assistant.",
+        api_url: str = None,
+        system_prompt: str = None,
         temperature: float = 0.5,
         top_p: float = 1,
         timeout: float = 20,
     ):
+        # Set endpoint and prompt for reasoner
+        if engine == "deepseek-reasoner":
+            api_url = api_url or "https://api.deepseek.com/v1/reasoning/chat/completions"
+            system_prompt = system_prompt or "You are DeepSeek Reasoner, an advanced step-by-step reasoning AI."
+        else:
+            api_url = api_url or "https://api.deepseek.com/v1/chat/completions"
+            system_prompt = system_prompt or "You are DeepSeek, a helpful and versatile AI assistant."
         super().__init__(api_key, engine, api_url, system_prompt, timeout=timeout, temperature=temperature, top_p=top_p)
         self.api_url = api_url
 
@@ -130,6 +141,9 @@ class deepseek(BaseLLM):
             delta = choices[0].get("delta")
             if not delta:
                 continue
+            # Handle reasoning_content for deepseek-reasoner
+            if "reasoning_content" in delta and delta["reasoning_content"]:
+                yield {"reasoning_content": delta["reasoning_content"]}
             if "role" in delta:
                 response_role = delta["role"]
             if "content" in delta and delta["content"]:
@@ -207,6 +221,9 @@ class deepseek(BaseLLM):
                     delta = choices[0].get("delta")
                     if not delta:
                         continue
+                    # Handle reasoning_content for deepseek-reasoner
+                    if "reasoning_content" in delta and delta["reasoning_content"]:
+                        yield {"reasoning_content": delta["reasoning_content"]}
                     if "role" in delta:
                         response_role = delta["role"]
                     if "content" in delta and delta["content"]:
