@@ -84,9 +84,15 @@ class deepseek(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt}
+        # --- PATCH: Always prepend system prompt if not present ---
+        messages = self.conversation[convo_id][:]
+        if not messages or messages[0].get('role') != 'system':
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
+        # If only system prompt, add current user prompt
+        if len(messages) == 1:
+            messages.append({"role": "user", "content": prompt})
         json_post = {
-            "messages": self.conversation[convo_id] if pass_history else [{
+            "messages": messages if pass_history else [{
                 "role": "user",
                 "content": prompt
             }],
@@ -174,9 +180,15 @@ class deepseek(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        self.conversation[convo_id][0] = {"role": "system","content": self.system_prompt}
+        # --- PATCH: Always prepend system prompt if not present ---
+        messages = self.conversation[convo_id][:]
+        if not messages or messages[0].get('role') != 'system':
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
+        # If only system prompt, add current user prompt
+        if len(messages) == 1:
+            messages.append({"role": "user", "content": prompt})
         json_post = {
-            "messages": self.conversation[convo_id] if pass_history else [{
+            "messages": messages if pass_history else [{
                 "role": "user",
                 "content": prompt
             }],
