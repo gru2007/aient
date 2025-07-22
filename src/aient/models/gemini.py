@@ -10,6 +10,8 @@ import copy
 from ..plugins import PLUGINS, get_tools_result_async, function_call_list
 from ..utils.scripts import safe_get
 
+USE_OPENAI_COMPAT = os.environ.get("GEMINI_USE_OPENAI_COMPAT", "false").lower() == "true"
+
 
 class gemini(BaseLLM):
     def __init__(
@@ -101,6 +103,33 @@ class gemini(BaseLLM):
         self.system_prompt = system_prompt or self.system_prompt
         self.conversation[convo_id] = list()
 
+    def get_openai_history(self, convo_id, prompt, pass_history, system_prompt=None, max_history=20):
+        """
+        Формирует историю для OpenAI-совместимого режима:
+        - system prompt всегда первый
+        - далее user/assistant
+        - все сообщения в формате {"role": ..., "content": ...}
+        - если истории слишком много — обрезать до последних max_history сообщений
+        """
+        messages = []
+        system_prompt = system_prompt or self.system_prompt
+        history = self.conversation.get(convo_id, []) if pass_history else []
+        # Преобразуем историю в OpenAI-формат
+        for msg in history:
+            if msg.get("role") and msg.get("parts"):
+                content = msg["parts"][0]["text"] if isinstance(msg["parts"][0], dict) and "text" in msg["parts"][0] else str(msg["parts"][0])
+                messages.append({"role": msg["role"], "content": content})
+        # Убедимся, что первый — system
+        if not messages or messages[0]["role"] != "system":
+            messages = [{"role": "system", "content": system_prompt}] + messages
+        # Если только system — добавим текущий prompt
+        if len(messages) == 1:
+            messages.append({"role": "user", "content": prompt})
+        # Обрезаем историю (оставляем system + последние max_history сообщений)
+        if len(messages) > max_history + 1:
+            messages = [messages[0]] + messages[-max_history:]
+        return messages
+
     def ask_stream(
         self,
         prompt: str,
@@ -122,35 +151,47 @@ class gemini(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        json_post = {
-            "contents": self.conversation[convo_id] if pass_history else [{
-                "role": "user",
-                "content": prompt
-            }],
-            "systemInstruction": {"parts": [{"text": self.system_prompt}]},
-            "safetySettings": [
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE"
-                }
-            ],
-        }
-
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
-        self.api_url = BaseAPI(url)
-        url = self.api_url.source_api_url
+        if USE_OPENAI_COMPAT:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+            url = base_url + "chat/completions"
+            api_key = os.environ.get("GOOGLE_AI_API_KEY", self.api_key)
+            headers["Authorization"] = f"Bearer {api_key}"
+            messages = self.get_openai_history(convo_id, prompt, pass_history, system_prompt)
+            json_post = {
+                "model": model or self.engine,
+                "messages": messages,
+                "temperature": kwargs.get("temperature", self.temperature),
+                "max_tokens": model_max_tokens,
+            }
+        else:
+            json_post = {
+                "contents": self.conversation[convo_id] if pass_history else [{
+                    "role": "user",
+                    "content": prompt
+                }],
+                "systemInstruction": {"parts": [{"text": self.system_prompt}]},
+                "safetySettings": [
+                    {
+                        "category": "HARM_CATEGORY_HARASSMENT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_HATE_SPEECH",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_NONE"
+                    }
+                ],
+            }
+            url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
+            self.api_url = BaseAPI(url)
+            url = self.api_url.source_api_url
 
         if self.print_log:
             print("url", url)
@@ -185,8 +226,8 @@ class gemini(BaseLLM):
                 if not line:
                     continue
                 line = line.decode("utf-8")
-                if line and '\"text\": \"' in line:
-                    content = line.split('\"text\": \"')[1][:-1]
+                if line and '"text": "' in line:
+                    content = line.split('"text": "')[1][:-1]
                     content = "\n".join(content.split("\\n"))
                     content = content.encode('utf-8').decode('unicode-escape')
                     full_response += content
@@ -221,59 +262,47 @@ class gemini(BaseLLM):
             "Content-Type": "application/json",
         }
 
-        json_post = {
-            "contents": self.conversation[convo_id] if pass_history else [{
-                "role": "user",
-                "content": prompt
-            }],
-            "systemInstruction": {"parts": [{"text": self.system_prompt}]},
-            "safetySettings": [
-                {
-                    "category": "HARM_CATEGORY_HARASSMENT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_HATE_SPEECH",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE"
-                },
-                {
-                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE"
-                }
-            ],
-        }
-
-        plugins = kwargs.get("plugins", PLUGINS)
-        if all(value == False for value in plugins.values()) == False and self.use_plugins:
-            tools = {
-                "tools": [
+        if USE_OPENAI_COMPAT:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+            url = base_url + "chat/completions"
+            api_key = os.environ.get("GOOGLE_AI_API_KEY", self.api_key)
+            headers["Authorization"] = f"Bearer {api_key}"
+            messages = self.get_openai_history(convo_id, prompt, pass_history, system_prompt)
+            json_post = {
+                "model": model or self.engine,
+                "messages": messages,
+                "temperature": kwargs.get("temperature", self.temperature),
+                "max_tokens": 4096,
+            }
+        else:
+            json_post = {
+                "contents": self.conversation[convo_id] if pass_history else [{
+                    "role": "user",
+                    "content": prompt
+                }],
+                "systemInstruction": {"parts": [{"text": self.system_prompt}]},
+                "safetySettings": [
                     {
-                        "function_declarations": [
-
-                        ]
+                        "category": "HARM_CATEGORY_HARASSMENT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_HATE_SPEECH",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                        "threshold": "BLOCK_NONE"
+                    },
+                    {
+                        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                        "threshold": "BLOCK_NONE"
                     }
                 ],
-                "tool_config": {
-                    "function_calling_config": {
-                        "mode": "AUTO",
-                    },
-                },
             }
-            json_post.update(copy.deepcopy(tools))
-            for item in plugins.keys():
-                try:
-                    if plugins[item]:
-                        json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                except:
-                    pass
-
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
-        self.api_url = BaseAPI(url)
-        url = self.api_url.source_api_url
+            url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
+            self.api_url = BaseAPI(url)
+            url = self.api_url.source_api_url
 
         if self.print_log:
             print("url", url)
@@ -287,71 +316,26 @@ class gemini(BaseLLM):
         revicing_function_call = False
         total_tokens = 0
         try:
-            async with self.aclient.stream(
-                "post",
-                url,
-                headers=headers,
-                json=json_post,
-                timeout=kwargs.get("timeout", self.timeout),
-            ) as response:
-                if response.status_code != 200:
-                    error_content = await response.aread()
-                    error_message = error_content.decode('utf-8')
-                    raise BaseException(f"{response.status_code}: {error_message}")
-                try:
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        # print(line)
-                        if line and '\"text\": \"' in line:
-                            content = line.split('\"text\": \"')[1][:-1]
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    headers=headers,
+                    json=json_post,
+                    timeout=kwargs.get("timeout", self.timeout),
+                ) as response:
+                    if response.status != 200:
+                        error_content = await response.text()
+                        raise BaseException(f"{response.status}: {error_content}")
+                    async for line in response.content:
+                        line = line.decode("utf-8")
+                        if line and '"text": "' in line:
+                            content = line.split('"text": "')[1][:-1]
                             content = "\n".join(content.split("\\n"))
                             full_response += content
                             yield content
-
-                        if line and '\"totalTokenCount\": ' in line:
-                            content = int(line.split('\"totalTokenCount\": ')[1])
-                            total_tokens = content
-
-                        if line and ('\"functionCall\": {' in line or revicing_function_call):
-                            revicing_function_call = True
-                            need_function_call = True
-                            if ']' in line:
-                                revicing_function_call = False
-                                continue
-
-                            function_full_response += line
-
-                except requests.exceptions.ChunkedEncodingError as e:
-                    print("Chunked Encoding Error occurred:", e)
-                except Exception as e:
-                    print("An error occurred:", e)
-
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
             return
 
-        if response.status_code != 200:
-            await response.aread()
-            print(response.text)
-            raise BaseException(f"{response.status_code} {response.reason} {response.text}")
-        if self.print_log:
-            print("\n\rtotal_tokens", total_tokens)
-        if need_function_call:
-            # print(function_full_response)
-            function_call = json.loads(function_full_response)
-            print(json.dumps(function_call, indent=4, ensure_ascii=False))
-            function_call_name = function_call["functionCall"]["name"]
-            function_full_response = json.dumps(function_call["functionCall"]["args"])
-            function_call_max_tokens = 32000
-            print("\033[32m function_call", function_call_name, "max token:", function_call_max_tokens, "\033[0m")
-            async for chunk in get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, model or self.engine, gemini, kwargs.get('api_key', self.api_key), self.api_url, use_plugins=False, model=model or self.engine, add_message=self.add_to_conversation, convo_id=convo_id, language=language):
-                if "function_response:" in chunk:
-                    function_response = chunk.replace("function_response:", "")
-                else:
-                    yield chunk
-            response_role = "model"
-            async for chunk in self.ask_stream_async(function_response, response_role, convo_id=convo_id, function_name=function_call_name, total_tokens=total_tokens, model=model or self.engine, function_arguments=function_call, api_key=kwargs.get('api_key', self.api_key), plugins=kwargs.get("plugins", PLUGINS), system_prompt=system_prompt):
-                yield chunk
-        else:
-            self.add_to_conversation([{"text": full_response}], response_role, convo_id=convo_id, total_tokens=total_tokens, pass_history=pass_history)
+        self.add_to_conversation([{"text": full_response}], response_role, convo_id=convo_id, total_tokens=total_tokens, pass_history=pass_history)
