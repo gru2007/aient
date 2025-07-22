@@ -2,6 +2,7 @@ import os
 import re
 import json
 import requests
+import logging
 
 
 from .base import BaseLLM
@@ -209,6 +210,8 @@ class vertex(BaseLLM):
         if self.print_log:
             replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
             print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
+            logging.info(f"[Vertex] Request URL: {self.api_url.source_api_url}")
+            logging.info(f"[Vertex] Request payload: {json.dumps(json_post, ensure_ascii=False)}")
 
         url = self.api_url.format(model=model or self.engine, stream="streamGenerateContent", api_key=self.api_key)
 
@@ -220,18 +223,24 @@ class vertex(BaseLLM):
                 timeout=kwargs.get("timeout", self.timeout),
                 stream=True,
             )
+            logging.info(f"[Vertex] Response status: {response.status_code}")
+            logging.info(f"[Vertex] Response body: {response.text}")
         except ConnectionError:
             print("连接错误，请检查服务器状态或网络连接。")
+            logging.error("[Vertex] Connection error")
             return
         except requests.exceptions.ReadTimeout:
             print("请求超时，请检查网络连接或增加超时时间。{e}")
+            logging.error("[Vertex] Read timeout")
             return
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
+            logging.error(f"[Vertex] Unexpected error: {e}")
             return
 
         if response.status_code != 200:
             print(response.text)
+            logging.error(f"[Vertex] Non-200 response: {response.status_code} {response.reason} {response.text}")
             raise BaseException(f"{response.status_code} {response.reason} {response.text}")
         response_role: str = "model"
         full_response: str = ""
@@ -240,6 +249,8 @@ class vertex(BaseLLM):
                 if not line:
                     continue
                 line = line.decode("utf-8")
+                if self.print_log:
+                    logging.info(f"[Vertex] Stream line: {line}")
                 if line and '\"text\": \"' in line:
                     content = line.split('\"text\": \"')[1][:-1]
                     content = "\n".join(content.split("\\n"))
@@ -247,9 +258,13 @@ class vertex(BaseLLM):
                     yield content
         except requests.exceptions.ChunkedEncodingError as e:
             print("Chunked Encoding Error occurred:", e)
+            logging.error(f"[Vertex] ChunkedEncodingError: {e}")
         except Exception as e:
             print("An error occurred:", e)
+            logging.error(f"[Vertex] Exception in stream: {e}")
 
+        if self.print_log:
+            logging.info(f"[Vertex] Full response: {full_response}")
         self.add_to_conversation([{"text": full_response}], response_role, convo_id=convo_id, pass_history=pass_history)
 
     async def ask_stream_async(
@@ -357,14 +372,13 @@ class vertex(BaseLLM):
                 json=json_post,
                 timeout=kwargs.get("timeout", self.timeout),
             ) as response:
-                if response.status_code != 200:
-                    error_content = await response.aread()
-                    error_message = error_content.decode('utf-8')
-                    raise BaseException(f"{response.status_code}: {error_message}")
+                logging.info(f"[Vertex] [async] Response status: {response.status_code}")
                 try:
                     async for line in response.aiter_lines():
                         if not line:
                             continue
+                        if self.print_log:
+                            logging.info(f"[Vertex] [async] Stream line: {line}")
                         # print(line)
                         if line and '\"text\": \"' in line:
                             content = line.split('\"text\": \"')[1][:-1]
@@ -387,19 +401,23 @@ class vertex(BaseLLM):
 
                 except requests.exceptions.ChunkedEncodingError as e:
                     print("Chunked Encoding Error occurred:", e)
+                    logging.error(f"[Vertex] [async] ChunkedEncodingError: {e}")
                 except Exception as e:
                     print("An error occurred:", e)
+                    logging.error(f"[Vertex] [async] Exception in stream: {e}")
 
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
+            logging.error(f"[Vertex] [async] Unexpected error: {e}")
             return
 
         if response.status_code != 200:
             await response.aread()
             print(response.text)
+            logging.error(f"[Vertex] [async] Non-200 response: {response.status_code} {response.reason} {response.text}")
             raise BaseException(f"{response.status_code} {response.reason} {response.text}")
         if self.print_log:
-            print("\n\rtotal_tokens", total_tokens)
+            logging.info(f"[Vertex] [async] total_tokens: {total_tokens}")
         if need_function_call:
             # print(function_full_response)
             function_call = json.loads(function_full_response)
