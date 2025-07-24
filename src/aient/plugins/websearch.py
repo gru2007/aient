@@ -44,6 +44,8 @@ def url_to_markdown(url):
                 body = body[0]
                 body = Cleaner(javascript=True, style=True).clean_html(body)
                 return ''.join(lxml.html.tostring(c, encoding='unicode') for c in body)
+        except ImportError as e:
+            raise e
         except Exception as e:
             # print('\033[31m')
             # print("error: url_to_markdown url", url)
