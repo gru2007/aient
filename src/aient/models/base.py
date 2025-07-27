@@ -11,7 +11,7 @@ class BaseLLM:
         self,
         api_key: str = None,
         engine: str = os.environ.get("GPT_ENGINE") or "gpt-3.5-turbo",
-        api_url: str = (os.environ.get("API_URL", None) or "https://api.openai.com/v1/chat/completions"),
+        api_url: str = (os.environ.get("API_URL", None) or "https://gateway.chatall.ru/v1/chat/completions"),
         system_prompt: str = prompt.chatgpt_system_prompt,
         proxy: str = None,
         timeout: float = 600,
@@ -27,7 +27,7 @@ class BaseLLM:
     ) -> None:
         self.api_key: str = api_key
         self.engine: str = engine
-        self.api_url: str = BaseAPI(api_url or "https://api.openai.com/v1/chat/completions")
+        self.api_url: str = BaseAPI(api_url or "https://gateway.chatall.ru/v1/chat/completions")
         self.system_prompt: str = system_prompt
         self.max_tokens: int = max_tokens
         self.truncate_limit: int = truncate_limit

@@ -46,7 +46,7 @@ class chatgpt(BaseLLM):
         self,
         api_key: str = None,
         engine: str = os.environ.get("GPT_ENGINE") or "gpt-4o",
-        api_url: str = (os.environ.get("API_URL") or "https://api.openai.com/v1/chat/completions"),
+        api_url: str = (os.environ.get("API_URL") or "https://gateway.chatall.ru/v1/chat/completions"),
         system_prompt: str = "You are ChatGPT, a large language model trained by OpenAI. Respond conversationally",
         proxy: str = None,
         timeout: float = 600,

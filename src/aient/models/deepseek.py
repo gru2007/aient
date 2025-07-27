@@ -21,10 +21,10 @@ class deepseek(BaseLLM):
     ):
         # Set endpoint and prompt for reasoner
         if engine == "deepseek-reasoner":
-            api_url = api_url or "https://api.deepseek.com/v1/reasoning/chat/completions"
+            api_url = api_url or "https://gateway.chatall.ru/v1/reasoning/chat/completions"
             system_prompt = system_prompt or "You are DeepSeek Reasoner, an advanced step-by-step reasoning AI."
         else:
-            api_url = api_url or "https://api.deepseek.com/v1/chat/completions"
+            api_url = api_url or "https://gateway.chatall.ru/v1/chat/completions"
             system_prompt = system_prompt or "You are DeepSeek, a helpful and versatile AI assistant."
         super().__init__(api_key, engine, api_url, system_prompt, timeout=timeout, temperature=temperature, top_p=top_p)
         self.api_url = api_url

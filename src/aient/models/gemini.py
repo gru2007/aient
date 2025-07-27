@@ -17,7 +17,7 @@ class gemini(BaseLLM):
         self,
         api_key: str = None,
         engine: str = os.environ.get("GPT_ENGINE") or "gemini-1.5-pro-latest",
-        api_url: str = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}",
+        api_url: str = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}",
         system_prompt: str = "You are Gemini, a large language model trained by Google. Respond conversationally",
         temperature: float = 0.5,
         top_p: float = 0.7,

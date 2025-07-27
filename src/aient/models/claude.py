@@ -18,7 +18,7 @@ class claude(BaseLLM):
         self,
         api_key: str,
         engine: str = os.environ.get("GPT_ENGINE") or "claude-2.1",
-        api_url: str = "https://api.anthropic.com/v1/complete",
+        api_url: str = "https://gateway.chatall.ru/v1/complete",
         system_prompt: str = "You are ChatGPT, a large language model trained by OpenAI. Respond conversationally",
         temperature: float = 0.5,
         top_p: float = 0.7,
