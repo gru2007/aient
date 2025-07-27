@@ -166,13 +166,14 @@ class gemini(BaseLLM):
         }
 
         plugins = kwargs.get("plugins", PLUGINS)
-        if all(value == False for value in plugins.values()) == False and self.use_plugins:
+        enabled_plugins = [item for item in plugins.keys() if plugins[item]]
+        
+        if enabled_plugins and self.use_plugins:
             tools = {
                 "tools": [
                     {
                         "tool_type": "FUNCTION",
-                        "function_declarations": [
-                        ]
+                        "function_declarations": []
                     }
                 ],
                 "tool_config": {
@@ -182,11 +183,11 @@ class gemini(BaseLLM):
                 },
             }
             json_post.update(copy.deepcopy(tools))
-            for item in plugins.keys():
+            for item in enabled_plugins:
                 try:
-                    if plugins[item]:
-                        json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                except:
+                    json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+                except Exception as e:
+                    print(f"Error adding function {item}: {e}")
                     pass
 
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
@@ -299,13 +300,14 @@ class gemini(BaseLLM):
         }
 
         plugins = kwargs.get("plugins", PLUGINS)
-        if all(value == False for value in plugins.values()) == False and self.use_plugins:
+        enabled_plugins = [item for item in plugins.keys() if plugins[item]]
+        
+        if enabled_plugins and self.use_plugins:
             tools = {
                 "tools": [
                     {
                         "tool_type": "FUNCTION",
-                        "function_declarations": [
-                        ]
+                        "function_declarations": []
                     }
                 ],
                 "tool_config": {
@@ -316,11 +318,10 @@ class gemini(BaseLLM):
             }
             json_post.update(copy.deepcopy(tools))
             print(f"DEBUG: Tools block added to json_post")
-            for item in plugins.keys():
+            for item in enabled_plugins:
                 try:
-                    if plugins[item]:
-                        json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                        print(f"DEBUG: Added function {item}")
+                    json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+                    print(f"DEBUG: Added function {item}")
                 except Exception as e:
                     print(f"DEBUG: Error adding function {item}: {e}")
 

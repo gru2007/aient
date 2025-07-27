@@ -327,13 +327,13 @@ class vertex(BaseLLM):
         }
 
         plugins = kwargs.get("plugins", PLUGINS)
-        if all(value == False for value in plugins.values()) == False and self.use_plugins:
+        enabled_plugins = [item for item in plugins.keys() if plugins[item]]
+        
+        if enabled_plugins and self.use_plugins:
             tools = {
                 "tools": [
                     {
-                        "function_declarations": [
-
-                        ]
+                        "function_declarations": []
                     }
                 ],
                 "tool_config": {
@@ -343,11 +343,11 @@ class vertex(BaseLLM):
                 },
             }
             json_post.update(copy.deepcopy(tools))
-            for item in plugins.keys():
+            for item in enabled_plugins:
                 try:
-                    if plugins[item]:
-                        json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                except:
+                    json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+                except Exception as e:
+                    print(f"Error adding function {item}: {e}")
                     pass
 
         if self.print_log:
