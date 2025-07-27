@@ -152,9 +152,42 @@ class gemini(BaseLLM):
                 {
                     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
                     "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
+                    "threshold": "BLOCK_NONE"
                 }
             ],
+            "generationConfig": {
+                "temperature": self.temperature,
+                "topP": self.top_p,
+                "maxOutputTokens": 8192
+            },
         }
+
+        plugins = kwargs.get("plugins", PLUGINS)
+        if all(value == False for value in plugins.values()) == False and self.use_plugins:
+            tools = {
+                "tools": [
+                    {
+                        "tool_type": "FUNCTION",
+                        "function_declarations": [
+                        ]
+                    }
+                ],
+                "tool_config": {
+                    "function_calling_config": {
+                        "mode": "AUTO",
+                    },
+                },
+            }
+            json_post.update(copy.deepcopy(tools))
+            for item in plugins.keys():
+                try:
+                    if plugins[item]:
+                        json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+                except:
+                    pass
 
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
         self.api_url = BaseAPI(url)
@@ -272,7 +305,6 @@ class gemini(BaseLLM):
                     {
                         "tool_type": "FUNCTION",
                         "function_declarations": [
-
                         ]
                     }
                 ],
@@ -283,12 +315,14 @@ class gemini(BaseLLM):
                 },
             }
             json_post.update(copy.deepcopy(tools))
+            print(f"DEBUG: Tools block added to json_post")
             for item in plugins.keys():
                 try:
                     if plugins[item]:
                         json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                except:
-                    pass
+                        print(f"DEBUG: Added function {item}")
+                except Exception as e:
+                    print(f"DEBUG: Error adding function {item}: {e}")
 
         # Use streamGenerateContent for streaming responses
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
