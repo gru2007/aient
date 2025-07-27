@@ -286,8 +286,7 @@ class gemini(BaseLLM):
                 except:
                     pass
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
-        self.api_url = BaseAPI(url)
+        # Используем URL, переданный в конструкторе
         url = self.api_url.source_api_url
 
         if self.print_log:
