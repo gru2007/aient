@@ -45,6 +45,11 @@ class gemini(BaseLLM):
 
         if convo_id not in self.conversation:
             self.reset(convo_id=convo_id)
+        
+        # Check if message is None or empty
+        if message is None or message == "":
+            print("error: add_to_conversation message is None or empty")
+            return
         # print("message", message)
 
         if function_arguments:
@@ -55,6 +60,9 @@ class gemini(BaseLLM):
                 }
             )
             function_call_name = function_arguments["functionCall"]["name"]
+            # Ensure message is not None or empty for function response
+            if message is None or message == "":
+                message = "Function executed successfully"
             self.conversation[convo_id].append(
                 {
                     "role": "function",
@@ -219,6 +227,7 @@ class gemini(BaseLLM):
 
         headers = {
             "Content-Type": "application/json",
+            "Accept": "application/json",
         }
 
         json_post = {
@@ -243,8 +252,17 @@ class gemini(BaseLLM):
                 {
                     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
                     "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
+                    "threshold": "BLOCK_NONE"
                 }
             ],
+            "generationConfig": {
+                "temperature": self.temperature,
+                "topP": self.top_p,
+                "maxOutputTokens": 8192
+            },
         }
 
         plugins = kwargs.get("plugins", PLUGINS)
@@ -252,6 +270,7 @@ class gemini(BaseLLM):
             tools = {
                 "tools": [
                     {
+                        "tool_type": "FUNCTION",
                         "function_declarations": [
 
                         ]
@@ -271,6 +290,7 @@ class gemini(BaseLLM):
                 except:
                     pass
 
+        # Use streamGenerateContent for streaming responses
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
         self.api_url = BaseAPI(url)
         url = self.api_url.source_api_url
@@ -321,6 +341,8 @@ class gemini(BaseLLM):
                                 continue
 
                             function_full_response += line
+                            if self.print_log:
+                                print(f"Function call line: {line}")
 
                 except requests.exceptions.ChunkedEncodingError as e:
                     print("Chunked Encoding Error occurred:", e)
@@ -329,6 +351,8 @@ class gemini(BaseLLM):
 
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
+            import traceback
+            traceback.print_exc()
             return
 
         if response.status_code != 200:
@@ -339,12 +363,21 @@ class gemini(BaseLLM):
             print("\n\rtotal_tokens", total_tokens)
         if need_function_call:
             # print(function_full_response)
-            function_call = json.loads(function_full_response)
-            print(json.dumps(function_call, indent=4, ensure_ascii=False))
-            function_call_name = function_call["functionCall"]["name"]
-            function_full_response = json.dumps(function_call["functionCall"]["args"])
-            function_call_max_tokens = 32000
-            print("\033[32m function_call", function_call_name, "max token:", function_call_max_tokens, "\033[0m")
+            try:
+                function_call = json.loads(function_full_response)
+                print(json.dumps(function_call, indent=4, ensure_ascii=False))
+                function_call_name = function_call["functionCall"]["name"]
+                function_full_response = json.dumps(function_call["functionCall"]["args"])
+                function_call_max_tokens = 32000
+                print("\033[32m function_call", function_call_name, "max token:", function_call_max_tokens, "\033[0m")
+            except json.JSONDecodeError as e:
+                print(f"Error parsing function call JSON: {e}")
+                print(f"Function response: {function_full_response}")
+                return
+            except KeyError as e:
+                print(f"Error accessing function call data: {e}")
+                print(f"Function call structure: {function_call}")
+                return
             async for chunk in get_tools_result_async(function_call_name, function_full_response, function_call_max_tokens, model or self.engine, gemini, kwargs.get('api_key', self.api_key), self.api_url, use_plugins=False, model=model or self.engine, add_message=self.add_to_conversation, convo_id=convo_id, language=language):
                 if "function_response:" in chunk:
                     function_response = chunk.replace("function_response:", "")
