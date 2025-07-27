@@ -2,7 +2,6 @@ import os
 import re
 import json
 import requests
-import logging
 
 from .base import BaseLLM
 from ..core.utils import BaseAPI
@@ -149,7 +148,7 @@ class gemini(BaseLLM):
             ],
         }
 
-        url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
+        url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
         self.api_url = BaseAPI(url)
         url = self.api_url.source_api_url
 
@@ -157,8 +156,6 @@ class gemini(BaseLLM):
             print("url", url)
             replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
             print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
-            logging.info(f"[Gemini] Request URL: {url}")
-            logging.info(f"[Gemini] Request payload: {json.dumps(json_post, ensure_ascii=False)}")
 
         try:
             response = self.session.post(
@@ -168,24 +165,18 @@ class gemini(BaseLLM):
                 timeout=kwargs.get("timeout", self.timeout),
                 stream=True,
             )
-            logging.info(f"[Gemini] Response status: {response.status_code}")
-            logging.info(f"[Gemini] Response body: {response.text}")
         except ConnectionError:
             print("连接错误，请检查服务器状态或网络连接。")
-            logging.error("[Gemini] Connection error")
             return
         except requests.exceptions.ReadTimeout:
             print("请求超时，请检查网络连接或增加超时时间。{e}")
-            logging.error("[Gemini] Read timeout")
             return
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
-            logging.error(f"[Gemini] Unexpected error: {e}")
             return
 
         if response.status_code != 200:
             print(response.text)
-            logging.error(f"[Gemini] Non-200 response: {response.status_code} {response.reason} {response.text}")
             raise BaseException(f"{response.status_code} {response.reason} {response.text}")
         response_role: str = "model"
         full_response: str = ""
@@ -194,8 +185,6 @@ class gemini(BaseLLM):
                 if not line:
                     continue
                 line = line.decode("utf-8")
-                if self.print_log:
-                    logging.info(f"[Gemini] Stream line: {line}")
                 if line and '\"text\": \"' in line:
                     content = line.split('\"text\": \"')[1][:-1]
                     content = "\n".join(content.split("\\n"))
@@ -204,13 +193,9 @@ class gemini(BaseLLM):
                     yield content
         except requests.exceptions.ChunkedEncodingError as e:
             print("Chunked Encoding Error occurred:", e)
-            logging.error(f"[Gemini] ChunkedEncodingError: {e}")
         except Exception as e:
             print("An error occurred:", e)
-            logging.error(f"[Gemini] Exception in stream: {e}")
 
-        if self.print_log:
-            logging.info(f"[Gemini] Full response: {full_response}")
         self.add_to_conversation([{"text": full_response}], response_role, convo_id=convo_id, pass_history=pass_history)
 
     async def ask_stream_async(
@@ -286,15 +271,14 @@ class gemini(BaseLLM):
                 except:
                     pass
 
-        # Используем URL, переданный в конструкторе
+        url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
+        self.api_url = BaseAPI(url)
         url = self.api_url.source_api_url
 
         if self.print_log:
             print("url", url)
             replaced_text = json.loads(re.sub(r';base64,([A-Za-z0-9+/=]+)', ';base64,***', json.dumps(json_post)))
             print(json.dumps(replaced_text, indent=4, ensure_ascii=False))
-            logging.info(f"[Gemini] Request URL: {url}")
-            logging.info(f"[Gemini] Request payload: {json.dumps(json_post, ensure_ascii=False)}")
 
         response_role: str = "model"
         full_response: str = ""
@@ -310,13 +294,14 @@ class gemini(BaseLLM):
                 json=json_post,
                 timeout=kwargs.get("timeout", self.timeout),
             ) as response:
-                logging.info(f"[Gemini] [async] Response status: {response.status_code}")
+                if response.status_code != 200:
+                    error_content = await response.aread()
+                    error_message = error_content.decode('utf-8')
+                    raise BaseException(f"{response.status_code}: {error_message}")
                 try:
                     async for line in response.aiter_lines():
                         if not line:
                             continue
-                        if self.print_log:
-                            logging.info(f"[Gemini] [async] Stream line: {line}")
                         # print(line)
                         if line and '\"text\": \"' in line:
                             content = line.split('\"text\": \"')[1][:-1]
@@ -339,23 +324,19 @@ class gemini(BaseLLM):
 
                 except requests.exceptions.ChunkedEncodingError as e:
                     print("Chunked Encoding Error occurred:", e)
-                    logging.error(f"[Gemini] [async] ChunkedEncodingError: {e}")
                 except Exception as e:
                     print("An error occurred:", e)
-                    logging.error(f"[Gemini] [async] Exception in stream: {e}")
 
         except Exception as e:
             print(f"发生了未预料的错误: {e}")
-            logging.error(f"[Gemini] [async] Unexpected error: {e}")
             return
 
         if response.status_code != 200:
             await response.aread()
             print(response.text)
-            logging.error(f"[Gemini] [async] Non-200 response: {response.status_code} {response.reason} {response.text}")
             raise BaseException(f"{response.status_code} {response.reason} {response.text}")
         if self.print_log:
-            logging.info(f"[Gemini] [async] total_tokens: {total_tokens}")
+            print("\n\rtotal_tokens", total_tokens)
         if need_function_call:
             # print(function_full_response)
             function_call = json.loads(function_full_response)
