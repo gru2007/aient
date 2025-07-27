@@ -4,8 +4,11 @@ import json
 import fnmatch
 import requests
 import urllib.parse
+import logging
 
 from ..core.utils import get_image_message
+
+logger = logging.getLogger(__name__)
 
 def get_doc_from_url(url):
     filename = urllib.parse.unquote(url.split("/")[-1])
@@ -51,9 +54,34 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
             "{}"
             "</document>"
         ).format(text)
-    if filename and filename[-3:] == "jpg" or filename[-3:] == "png" or filename[-4:] == "jpeg":
-        prompt = await get_image_message(docurl, engine_type)
-    if filename and filename[-3:] == "wav" or filename[-3:] == "mp3":
+    if filename and (filename[-3:] == "jpg" or filename[-3:] == "png" or filename[-4:] == "jpeg"):
+        # Check if docurl is a local file path or URL
+        if docurl and (docurl.startswith("http") or docurl.startswith("data:")):
+            # It's a URL or base64 string
+            prompt = await get_image_message(docurl, engine_type)
+        elif os.path.exists(str(docpath)):
+            # It's a local file - convert to base64
+            import base64
+            with open(docpath, "rb") as image_file:
+                image_data = image_file.read()
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                # Determine mime type based on file extension
+                if filename.endswith('.jpg') or filename.endswith('.jpeg'):
+                    mime_type = "image/jpeg"
+                elif filename.endswith('.png'):
+                    mime_type = "image/png"
+                else:
+                    mime_type = "image/jpeg"  # default
+                base64_data_uri = f"data:{mime_type};base64,{base64_image}"
+                prompt = await get_image_message(base64_data_uri, engine_type)
+        else:
+            # Fallback: try to treat as URL anyway
+            try:
+                prompt = await get_image_message(docurl, engine_type)
+            except Exception as e:
+                logger.error(f"Failed to process image: {e}")
+                prompt = f"[Image processing failed: {str(e)}]"
+    if filename and (filename[-3:] == "wav" or filename[-3:] == "mp3"):
         with open(docpath, "rb") as file:
             file_bytes = file.read()
         prompt = get_audio_message(file_bytes)
@@ -63,7 +91,7 @@ async def Document_extract(docurl, docpath=None, engine_type = None):
             "{}"
             "</voice-to-text>"
         ).format(prompt)
-    if os.path.exists(docpath):
+    if docpath and os.path.exists(docpath):
         os.remove(docpath)
     return prompt
 
