@@ -21,7 +21,7 @@ class gemini(BaseLLM):
         temperature: float = 0.5,
         top_p: float = 0.7,
         timeout: float = 20,
-        use_plugins: bool = True,
+        use_plugins: bool = False,  # Disable plugins/tools for Gemini due to API compatibility issues
         print_log: bool = False,
     ):
         url = api_url.format(model=engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", api_key))
@@ -165,30 +165,31 @@ class gemini(BaseLLM):
             },
         }
 
-        plugins = kwargs.get("plugins", PLUGINS)
-        enabled_plugins = [item for item in plugins.keys() if plugins[item]]
+        # Disable tools for Gemini due to API compatibility issues
+        # plugins = kwargs.get("plugins", PLUGINS)
+        # enabled_plugins = [item for item in plugins.keys() if plugins[item]]
         
-        if enabled_plugins and self.use_plugins:
-            tools = {
-                "tools": [
-                    {
-                        "tool_type": "FUNCTION",
-                        "function_declarations": []
-                    }
-                ],
-                "tool_config": {
-                    "function_calling_config": {
-                        "mode": "AUTO",
-                    },
-                },
-            }
-            json_post.update(copy.deepcopy(tools))
-            for item in enabled_plugins:
-                try:
-                    json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                except Exception as e:
-                    print(f"Error adding function {item}: {e}")
-                    pass
+        # if enabled_plugins and self.use_plugins:
+        #     tools = {
+        #         "tools": [
+        #             {
+        #                 "tool_type": "FUNCTION",
+        #                 "function_declarations": []
+        #             }
+        #         ],
+        #         "tool_config": {
+        #             "function_calling_config": {
+        #                 "mode": "AUTO",
+        #             },
+        #         },
+        #     }
+        #     json_post.update(copy.deepcopy(tools))
+        #     for item in enabled_plugins:
+        #         try:
+        #             json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+        #         except Exception as e:
+        #             print(f"Error adding function {item}: {e}")
+        #             pass
 
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
         self.api_url = BaseAPI(url)
@@ -299,31 +300,32 @@ class gemini(BaseLLM):
             },
         }
 
-        plugins = kwargs.get("plugins", PLUGINS)
-        enabled_plugins = [item for item in plugins.keys() if plugins[item]]
+        # Disable tools for Gemini due to API compatibility issues
+        # plugins = kwargs.get("plugins", PLUGINS)
+        # enabled_plugins = [item for item in plugins.keys() if plugins[item]]
         
-        if enabled_plugins and self.use_plugins:
-            tools = {
-                "tools": [
-                    {
-                        "tool_type": "FUNCTION",
-                        "function_declarations": []
-                    }
-                ],
-                "tool_config": {
-                    "function_calling_config": {
-                        "mode": "AUTO",
-                    },
-                },
-            }
-            json_post.update(copy.deepcopy(tools))
-            print(f"DEBUG: Tools block added to json_post")
-            for item in enabled_plugins:
-                try:
-                    json_post["tools"][0]["function_declarations"].append(function_call_list[item])
-                    print(f"DEBUG: Added function {item}")
-                except Exception as e:
-                    print(f"DEBUG: Error adding function {item}: {e}")
+        # if enabled_plugins and self.use_plugins:
+        #     tools = {
+        #         "tools": [
+        #             {
+        #                 "tool_type": "FUNCTION",
+        #                 "function_declarations": []
+        #             }
+        #         ],
+        #         "tool_config": {
+        #             "function_calling_config": {
+        #                 "mode": "AUTO",
+        #             },
+        #         },
+        #     }
+        #     json_post.update(copy.deepcopy(tools))
+        #     print(f"DEBUG: Tools block added to json_post")
+        #     for item in enabled_plugins:
+        #         try:
+        #             json_post["tools"][0]["function_declarations"].append(function_call_list[item])
+        #             print(f"DEBUG: Added function {item}")
+        #         except Exception as e:
+        #             print(f"DEBUG: Error adding function {item}: {e}")
 
         # Use streamGenerateContent for streaming responses
         url = "https://gateway.chatall.ru/v1beta/models/{model}:{stream}?key={api_key}".format(model=model or self.engine, stream="streamGenerateContent", api_key=os.environ.get("GOOGLE_AI_API_KEY", self.api_key) or kwargs.get("api_key"))
